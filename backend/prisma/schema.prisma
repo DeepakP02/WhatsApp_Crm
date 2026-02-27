@@ -1,0 +1,281 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  TEAM_LEADER
+  COUNSELOR
+  CUSTOMER_SUPPORT
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  ENROLLED
+  LOST
+}
+
+enum Channel {
+  WHATSAPP
+  FACEBOOK
+  WEBSITE
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+model User {
+  id         Int        @id @default(autoincrement())
+  uuid       String     @unique @default(uuid())
+  name       String
+  email      String     @unique
+  password   String
+  role       Role
+  status     Status     @default(ACTIVE)
+  teamId     Int?
+  team       Team?      @relation("TeamMembers", fields: [teamId], references: [id])
+  ledTeam    Team?      @relation("TeamLeader")
+  country    String?
+  leads      Lead[]
+  messages   Message[]
+  notes      Note[]
+  activityLogs ActivityLog[]
+  callLogs   CallLog[]
+  templates  Template[]
+  auditLogs  AuditLog[]
+  updatedAIConfigs AIConfig[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Team {
+  id           Int           @id @default(autoincrement())
+  name         String
+  country      String?
+  leaderId     Int?          @unique
+  leader       User?         @relation("TeamLeader", fields: [leaderId], references: [id])
+  members      User[]        @relation("TeamMembers")
+  routingRules RoutingRule[]
+  createdAt    DateTime      @default(now())
+}
+
+model Lead {
+  id            Int              @id @default(autoincrement())
+  name          String
+  phone         String
+  email         String?
+  country       String
+  source        String
+  program       String?
+  intake        String?
+  budget        Float?
+  score         Int?
+  stage         LeadStage        @default(NEW)
+  assignedToId  Int?
+  assignedTo    User?            @relation(fields: [assignedToId], references: [id])
+  status        Status           @default(ACTIVE)
+  conversations Conversation[]
+  qualification AIQualification?
+  notes         Note[]
+  activityLogs    ActivityLog[]
+  revenues        Revenue[]
+  callLogs      CallLog[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model Conversation {
+  id          Int        @id @default(autoincrement())
+  leadId      Int
+  lead        Lead       @relation(fields: [leadId], references: [id])
+  channel     Channel
+  unreadCount Int        @default(0)
+  lastMessage String?
+  messages    Message[]
+  slaStatus   SlaStatus?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       Int?
+  sender         User?        @relation(fields: [senderId], references: [id])
+  body           String       @db.Text
+  direction      Direction
+  status         String       @default("SENT")
+  sentAt         DateTime     @default(now())
+}
+
+model AIQualification {
+  id        Int      @id @default(autoincrement())
+  leadId    Int      @unique
+  lead      Lead     @relation(fields: [leadId], references: [id])
+  answers   Json
+  score     Int
+  category  String
+  summary   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  leadId    Int
+  lead      Lead     @relation(fields: [leadId], references: [id])
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  leadId      Int?
+  lead        Lead?    @relation(fields: [leadId], references: [id])
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  type        String
+  description String   @db.Text
+  createdAt   DateTime @default(now())
+}
+
+model CallLog {
+  id       Int      @id @default(autoincrement())
+  leadId   Int
+  lead     Lead     @relation(fields: [leadId], references: [id])
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
+  duration Int?
+  outcome  String?
+  notes    String?  @db.Text
+  calledAt DateTime @default(now())
+}
+
+model Template {
+  id          Int       @id @default(autoincrement())
+  name        String
+  body        String    @db.Text
+  channel     Channel
+  createdById Int
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+}
+
+model RoutingRule {
+  id        Int      @id @default(autoincrement())
+  country   String
+  teamId    Int
+  team      Team     @relation(fields: [teamId], references: [id])
+  strategy  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SlaConfig {
+  id              Int      @id @default(autoincrement())
+  responseMinutes Int
+  escalateMinutes Int
+  createdAt       DateTime @default(now())
+}
+
+model SlaStatus {
+  id             Int          @id @default(autoincrement())
+  conversationId Int          @unique
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  lastResponseAt DateTime?
+  isBreached     Boolean      @default(false)
+  updatedAt      DateTime     @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  module    String
+  detail    String?  @db.Text
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+model Billing {
+  id        Int       @id @default(autoincrement())
+  planName  String
+  price     Float
+  cycle     String
+  status    String    @default("ACTIVE")
+  startDate DateTime
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Revenue {
+  id        Int      @id @default(autoincrement())
+  amount    Float
+  source    String?
+  leadId    Int?
+  lead      Lead?    @relation(fields: [leadId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Channels {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      Channel
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AIConfig {
+  id               Int      @id @default(autoincrement())
+  isEnabled        Boolean  @default(true)
+  autoQualifyLeads Boolean  @default(true)
+  model            String   @default("GPT-4o")
+  confidenceScore  Int      @default(80)
+  updatedAt        DateTime @updatedAt
+  updatedById      Int
+  updatedBy        User     @relation(fields: [updatedById], references: [id])
+}
+
+model WorkingHours {
+  id          Int      @id @default(autoincrement())
+  dayOfWeek   Int      // 0 = Sunday, 1 = Monday, etc.
+  isActive    Boolean  @default(true)
+  startTime   String   @default("09:00")
+  endTime     String   @default("17:00")
+  timezone    String   @default("UTC")
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([dayOfWeek, timezone])
+}

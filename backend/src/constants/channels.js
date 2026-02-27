@@ -1,0 +1,5 @@
+export const CHANNELS = {
+    WHATSAPP: 'WHATSAPP',
+    FACEBOOK: 'FACEBOOK',
+    WEBSITE: 'WEBSITE'
+};
